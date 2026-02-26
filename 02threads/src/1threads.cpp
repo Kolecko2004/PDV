@@ -45,16 +45,68 @@ void map_manual(std::vector<float>& data, MapFn map_fn) {
 }
 
 void map_manual_locking(std::vector<float>& data, MapFn map_fn) {
-    // TODO: opravte race condition v `map_manual` pomoci mutexu
-    throw pdv::not_implemented();
+    std::mutex mtx;
+    size_t i = 0;
+    auto process = [&] {
+        while (true) {
+            auto lock = std::unique_lock(mtx);
+            size_t idx = i++;
+            lock.unlock();
+            if (idx >= data.size()) {
+                break;
+            }
+            // kazde vlakno si ve smycce vezme a incrementuje dalsi index ke zpracovani...
+            auto& entry = data[idx];
+            // ...a prvek zpracuje
+            entry = map_fn(entry);
+        }
+    };
+
+    auto worker_threads = std::vector<std::jthread>();
+    for (size_t j = 0; j < THREAD_COUNT; j++) {
+        worker_threads.push_back(std::jthread(process));
+    }
 }
 
 void map_manual_atomic(std::vector<float>& data, MapFn map_fn) {
-    // TODO: opravte race condition v `map_manual` pomoci atomicke promenne
-    throw pdv::not_implemented();
+    std::atomic<size_t> counter = 0;
+    auto process = [&] {
+        while (true) {
+            // auto lock = std::unique_lock(mtx);
+            size_t idx = counter.fetch_add(1);
+            if (idx >= data.size()) {
+                break;
+            }
+            // kazde vlakno si ve smycce vezme a incrementuje dalsi index ke zpracovani...
+            auto& entry = data[idx];
+            // ...a prvek zpracuje
+            entry = map_fn(entry);
+        }
+    };
+
+    auto worker_threads = std::vector<std::jthread>();
+    for (size_t j = 0; j < THREAD_COUNT; j++) {
+        worker_threads.push_back(std::jthread(process));
+    }
 }
 
 void map_manual_ranges(std::vector<float>& data, MapFn map_fn) {
-    // TODO: opravte race condition v `map_manual` tim, ze kazdemu vlaknu predpocitate rozsah indexu, ktere ma zpracovat
-    throw pdv::not_implemented();
+    size_t data_size = data.size();
+    size_t thread_count = THREAD_COUNT;
+    auto worker_threads = std::vector<std::jthread>();
+    worker_threads.reserve(thread_count);
+
+    size_t size_of_part = data_size / thread_count;
+
+    for (size_t j = 0; j < THREAD_COUNT; j++) {
+        size_t start = j * size_of_part;
+
+        size_t end = start + size_of_part;
+
+        worker_threads.emplace_back([&, start, end]() {
+            for (size_t i = start; i < end; ++i) {
+                data[i] = map_fn(data[i]);
+            }
+        });
+    }
 }

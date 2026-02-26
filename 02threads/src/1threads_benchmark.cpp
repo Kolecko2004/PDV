@@ -15,7 +15,7 @@ void benchmark(std::vector<float> data, std::string_view fn_name, void (* fn)(st
     pdv::benchmark(fn_name, 10, [&] {
         fn(data, test_fn);
         // return a pointer to `data`, so that we get a checksum printed for validation (and avoid a copy)
-        return &data;
+        return data;
     });
 }
 
@@ -28,8 +28,8 @@ int main() {
     std::cout << std::fixed << std::setprecision(2);
 
     BENCHMARK(map_sequential);
-    BENCHMARK(map_std_seq);
-    BENCHMARK(map_std_par);
+    // BENCHMARK(map_std_seq);
+    // BENCHMARK(map_std_par);
     BENCHMARK(map_openmp);
     std::cout << "\n";
     BENCHMARK(map_manual);
