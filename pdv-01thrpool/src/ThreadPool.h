@@ -1,5 +1,6 @@
 #pragma once
 
+#include <condition_variable>
 #include <list>
 #include <vector>
 #include <thread>
@@ -12,6 +13,8 @@ class ThreadPool {
     std::vector<std::thread> worker_threads{};
     /// Funkce, kterou maji konzumenti vykonavat.
     WorkerT worker_fn;
+    std::mutex mutex;
+    std::condition_variable cv;
 
 public:
     ThreadPool(size_t thread_count, WorkerT worker) : worker_fn(worker) {
@@ -23,11 +26,13 @@ public:
         //     naleznete nize).
         //   - Vlakno se ukonci pokud uloha ke zpracovani je 0
         //   - Vytvorena vlakna vlozte do pole "worker_threads"
+        for (size_t idx = 0; idx < thread_count; ++idx) {
+            worker_threads.push_back(std::thread([this] {
+                // Ve spustenem vlakne zavolame metodu worker_loop, ktera ve smycce zpracovava vstup
+                worker_loop();
+            }));
+        }
 
-        worker_threads.push_back(std::thread([this] {
-            // Ve spustenem vlakne zavolame metodu worker_loop, ktera ve smycce zpracovava vstup
-            worker_loop();
-        }));
 
         // Tento kod nesplnuje zadani z nekolika duvodu:
         //   - Spousti pouze jedno vlakno konzumenta. Pokud vykonani uloh pomoci worker_fn(task)
@@ -50,10 +55,15 @@ public:
     }
 
     void process(const JobT job) {
+        {
+            std::unique_lock<std::mutex> lock(mutex);
+            job_queue.push_back(job);
+        }
+        cv.notify_one();
         // Bezpecne vlozte ulohu "job" do fronty uloh "job_queue"
 
         // Pridat ulohu do fronty muzeme nasledujicim volanim:
-        job_queue.push_back(job);
+
 
         // Kdyz timto zpusobem k fronte soucasne pristupuje vice vlaken, vysledek neni determinsticky.
         // Muze se se nam napriklad stat, ze nam jine vlakno nasi pridanou ulohu "prepise" a ta se tak ztrati.
@@ -63,7 +73,7 @@ public:
     /** Tato metoda nam umozni volajici funkci v main.cpp pockat na vsechna spustena vlakna konzumentu. */
     void join() {
         // Proiterujeme pres vsechna vlakna a pockame nez skonci.
-        for (auto& worker_thread : worker_threads) {
+        for (auto &worker_thread: worker_threads) {
             worker_thread.join();
         }
     }
@@ -71,19 +81,19 @@ public:
 private:
     void worker_loop() {
         while (true) {
-            if (job_queue.empty()) {
-                continue; // pokud je fronta prazdna, pokracujeme (busy waiting)
-                // Ve Vasi implementaci nahradte toto aktivni cekani pomoci podminkove promenne (condition_variable)
-            }
+            JobT job;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                cv.wait(lock, [this] { return !job_queue.empty(); });
 
-            auto job = job_queue.front(); // Precteme prvni ulohu ve fronte
-            job_queue.pop_front(); // A ulohu odstranime
+                job = job_queue.front(); // Precteme prvni ulohu ve fronte
+                job_queue.pop_front(); // A ulohu odstranime
+            }
 
             if (!job) {
                 break; // Pokud je "zpracovana" uloha 0, skoncime
             }
-
-            // Na zaver zavolame "worker_fn" funkci, ktera ulohu vykona
+            
             worker_fn(job);
         }
     }
