@@ -93,7 +93,7 @@ private:
             if (!job) {
                 break; // Pokud je "zpracovana" uloha 0, skoncime
             }
-            
+
             worker_fn(job);
         }
     }
