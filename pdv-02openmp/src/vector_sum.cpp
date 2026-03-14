@@ -1,4 +1,7 @@
 #include <omp.h>
+#include <algorithm>
+#include <numeric>
+#include <random>
 // V teto domaci uloze se Vas budeme snazit presvedcit, ze vykon vasi implementace zavisi do znacne miry na podobe
 // vstupnich dat. Pri navrhu efektivnich algoritmu byste se tedy meli rozhodovat i na zaklade datove sady.
 //
@@ -17,26 +20,28 @@ void vector_sum_omp_per_vector(const InputVectors& data, OutputVector& solution,
     // konkretnim vektoru. Tento pristup by mel byt zejmena vhodny, pokud mate maly pocet vektoru
     // velke delky.
 
-    #pragma omp parallel
-    {
+    for (size_t i = 0; i < data.size(); i++) {
         int64_t sum = 0;
-        const auto thread_block = 1 + data.size() / omp_get_num_threads();
-        auto end = std::min(thread_block * (omp_get_thread_num() + 1), data.size());
-
-        for (size_t i = thread_block * omp_get_thread_num(); i < end; i++) {
-            for (auto n : data[i]) {
-                sum += n;
-            }
-            solution[i] = sum;
+        #pragma omp parallel for reduction(+:sum)
+        for (auto n : data[i]) {
+            sum += n;
         }
+        solution[i] = sum;
     }
-
 }
 
 void vector_sum_omp_static(const InputVectors& data, OutputVector& solution, size_t min_vector_size) {
     // Pokud vektory, ktere zpracovavame nejsou prilis dlouhe, ale naopak jich musime zpracovat
     // velky pocet, muzeme zparalelizovat vnejsi for smycku, ktera prochazi pres jednotlive
     // vektory. Vyuzijte paralelizaci pres #pragma omp parallel for se statickym schedulingem.
+    #pragma omp parallel for
+    for (size_t i = 0; i < data.size(); i++) {
+        int64_t sum = 0;
+        for (auto n : data[i]) {
+            sum += n;
+        }
+        solution[i] = sum;
+    }
 }
 
 void vector_sum_omp_dynamic(const InputVectors& data, OutputVector& solution, size_t min_vector_size) {
@@ -45,6 +50,15 @@ void vector_sum_omp_dynamic(const InputVectors& data, OutputVector& solution, si
     // resenim pouziti dynamickeho schedulingu. Ten je rovnez vhodny v situacich, kdy
     // nevime predem, jak dlouho budou jednotlive vypocty trvat. Dani za to je vyssi
     // rezie pri zjistovani indexu 'i', ktery ma vlakno v dane chvili zpracovavat.
+
+    #pragma omp parallel for schedule(dynamic)
+    for (size_t i = 0; i < data.size(); i++) {
+        int64_t sum = 0;
+        for (auto n : data[i]) {
+            sum += n;
+        }
+        solution[i] = sum;
+    }
 }
 
 void vector_sum_omp_shuffle(const InputVectors& data, OutputVector& solution, size_t min_vector_size) {
@@ -59,4 +73,20 @@ void vector_sum_omp_shuffle(const InputVectors& data, OutputVector& solution, si
     // nejprve pole nahodne serazenych indexu a ty pak pouzit pro pristup k poli.
     // Uzitecnymi metodami mohou byt metody `std::iota(...)` (ktera Vam vygeneruje posloupnost
     // indexu od 0 do N) a `std::shuffle(...)`, ktera zajisti nahodne prohazeni prvku.
+    std::vector<size_t> order(data.size());
+    std::iota(order.begin(), order.end(), 0);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::shuffle(order.begin(), order.end(), gen);
+    #pragma omp parallel for
+    for (size_t k = 0; k < order.size(); k++) {
+        size_t i = order[k];
+        int64_t sum = 0;
+
+        for (auto n : data[i]) {
+            sum += n;
+        }
+        solution[i] = sum;
+    }
 }
