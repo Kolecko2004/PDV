@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <chrono>
-#include <osyncstream>
+#include <syncstream>
 constexpr size_t N1 = 1000000; // Kolik prvku budeme do BVS vkladat "napreskacku"
 constexpr size_t N2 = 40000; // Kolik prvku budeme do BVS vkladat "poporade"
 

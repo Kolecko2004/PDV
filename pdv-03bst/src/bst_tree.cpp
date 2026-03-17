@@ -1,9 +1,42 @@
 #include "bst_tree.h"
 
 void bst_tree::insert(int64_t data) {
-    node* new_node = new node(data);
+    auto new_node = new node(data);
+    new_node->left = nullptr;
+    new_node->right = nullptr;
 
-    // TODO: Naimplementujte zde vlaknove-bezpecne vlozeni do binarniho vyhledavaciho stromu
+    // Prázdný strom
+    node* expected = nullptr;
+    if (root.compare_exchange_strong(expected, new_node)) {
+        return;
+    }
+
+    auto compare_node = root.load();
+
+    while (true)
+    {
+        if (compare_node->data > new_node->data) {
+            if (compare_node->left != nullptr) {
+                compare_node = compare_node->left;
+            } else {
+                node* expected = nullptr;
+                if (compare_node->left.compare_exchange_strong(expected, new_node)) {
+                    break;
+                }
+                compare_node = compare_node->left.load();
+            }
+        } else {
+            if (compare_node->right != nullptr) {
+                compare_node = compare_node->right;
+            } else {
+                node* expected = nullptr;
+                if (compare_node->right.compare_exchange_strong(expected, new_node)) {
+                    break;
+                }
+                compare_node = compare_node->right.load();
+            }
+        }
+    }
 }
 
 // Rekurzivni funkce pro pruchod stromu a dealokaci pameti prirazene jednotlivym uzlum

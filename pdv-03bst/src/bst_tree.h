@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <atomic>
 
 class bst_tree {
 public:
@@ -9,8 +10,8 @@ public:
     // mohou byt atomicke i neatomicke) a clenskou promennou data.
     class node {
     public:
-        node* left{nullptr}; // Ukazatel na koren leveho podstromu
-        node* right{nullptr}; // Ukazatel na koren praveho podstromu
+        std::atomic<node*> left{nullptr}; // Ukazatel na koren leveho podstromu
+        std::atomic<node*> right{nullptr}; // Ukazatel na koren praveho podstromu
 
         // Pro pripomenuti: V binarnim vyhledavacim strome jsou uzly s nizsi hodnotou v levem
         // podstromu a uzly s vyssi hodnotou v pravem podstromu.
@@ -22,7 +23,7 @@ public:
     };
 
     // Ukazatel na koren stromu
-    node* root{nullptr};
+    std::atomic<node*> root{nullptr};
 
     // Destruktor stromu, ktery uvolni alokovanou pamet
     ~bst_tree();
