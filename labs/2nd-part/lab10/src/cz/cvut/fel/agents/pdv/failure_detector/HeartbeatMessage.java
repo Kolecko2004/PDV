@@ -1,4 +1,6 @@
 package cz.cvut.fel.agents.pdv.failure_detector;
 
-public class HeartbeatMessage {
+import cz.cvut.fel.agents.pdv.dsand.Message;
+
+public class HeartbeatMessage extends Message {
 }

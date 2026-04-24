@@ -1,0 +1,35 @@
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IndentPragmas: true
+
+# Braces on same line
+BreakBeforeBraces: Attach
+
+# Line length
+ColumnLimit: 120
+
+# Spaces
+SpaceAfterControlStatementKeyword: true   # if (  while (  for (
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInParentheses: false
+
+# Pointers and references
+PointerAlignment: Left                    # int* x  místo  int *x
+
+# Includes
+SortIncludes: CaseSensitive
+
+# Short blocks
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+
+# Arguments / parameters
+AlignAfterOpenBracket: Align
+BinPackArguments: false
+BinPackParameters: false
