@@ -1,4 +1,6 @@
 package cz.cvut.fel.agents.pdv.swim;
 
-public class PingMessage {
+import cz.cvut.fel.agents.pdv.dsand.Message;
+
+public class PingMessage extends Message {
 }

@@ -1,4 +1,8 @@
 package cz.cvut.fel.agents.pdv.swim;
 
-public class AckMessage {
+import cz.cvut.fel.agents.pdv.dsand.Message;
+
+public class AckMessage extends Message {
+    public final String authorID;
+    public AckMessage(String authorID) { this.authorID = authorID; }
 }

@@ -1,65 +1,82 @@
 #include "iddfs.h"
 #include <omp.h>
+#include <atomic>
+#include <vector>
+#include <algorithm>
 
-// Pomocná metoda pro kontrolu cyklů (na aktuální cestě)
-bool is_on_path(state_ptr s) {
-    auto current = s->previous_state();
-    while (current != nullptr) {
-        if (current->id() == s->id()) return true;
-        current = current->previous_state();
+static inline bool on_path(const std::vector<unsigned long long>& path, unsigned long long id) {
+    return std::find(path.begin(), path.end(), id) != path.end();
+}
+
+static inline bool publish_goal(unsigned long long cid, std::atomic<unsigned long long>& best_id) {
+    auto expected = best_id.load(std::memory_order_relaxed);
+    while (cid < expected) {
+        if (best_id.compare_exchange_weak(expected, cid, std::memory_order_relaxed, std::memory_order_relaxed)) {
+            return true;
+        }
     }
     return false;
 }
 
-void iddfs_worker(state_ptr current, int depth, int limit, bool& found, state_ptr& best_goal) {
-    // Pokud už nějaké vlákno našlo řešení, ukonči větev
-    if (found) return;
-
+static void iddfs_worker(const state_ptr& current, int depth, int limit,
+                         state_ptr& best_goal, std::atomic<unsigned long long>& best_id,
+                         std::vector<unsigned long long>& path) {
     if (current->goal()) {
-#pragma omp critical (goal_lock)
-        {
-            if (best_goal == nullptr || current->id() < best_goal->id()) {
-                best_goal = current;
+        unsigned long long cid = current->id();
+        if (publish_goal(cid, best_id)) {
+#pragma omp critical(goal_lock)
+            {
+                if (best_goal == nullptr || cid < best_goal->id()) {
+                    best_goal = current;
+                }
             }
-            found = true;
         }
         return;
     }
 
     if (depth == limit) return;
 
-    auto next = current->next_states();
-    for (auto& n : next) {
-        if (is_on_path(n)) continue; // Vynecháme cykly
+    auto next_states = current->next_states();
+    for (auto& n : next_states) {
+        unsigned long long nid = n->id();
+        if (on_path(path, nid)) continue;
 
-        // Tasking jen do určité hloubky, zbytek sekvenčně!
-        if (depth < 4) { // Číslo 4 si případně vytuň podle domény
-#pragma omp task shared(found, best_goal)
-            iddfs_worker(n, depth + 1, limit, found, best_goal);
+        if (depth < 2) {
+            auto child_path = path;
+            child_path.push_back(nid);
+#pragma omp task shared(best_goal, best_id) firstprivate(n, depth, limit, child_path)
+            iddfs_worker(n, depth + 1, limit, best_goal, best_id, child_path);
         } else {
-            iddfs_worker(n, depth + 1, limit, found, best_goal);
+            path.push_back(nid);
+            iddfs_worker(n, depth + 1, limit, best_goal, best_id, path);
+            path.pop_back();
         }
     }
 }
 
 state_ptr iddfs(state_ptr root) {
+    if (root->goal()) return root;
+
     int limit = 0;
     state_ptr best_goal = nullptr;
 
     while (best_goal == nullptr) {
-        bool found = false;
+        std::atomic<unsigned long long> best_id(~0ull);
+        std::vector<unsigned long long> path;
+        path.reserve(64);
+        path.push_back(root->id());
 
 #pragma omp parallel
         {
-            // Inicializace tasků musí proběhnout jen v jednom vlákně (single)
 #pragma omp single
             {
-                iddfs_worker(root, 0, limit, found, best_goal);
-            } // Na konci single bloku je implicitní bariéra, počká na všechny tasky
+                iddfs_worker(root, 0, limit, best_goal, best_id, path);
+            }
         }
 
         if (best_goal != nullptr) return best_goal;
-        limit++;
+        ++limit;
     }
-    return nullptr;
+
+    return best_goal;
 }
